@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Voyager 1 & 2 | Cinematic Trajectory Simulation</title>
+<style>
+  :root{
+    --fg:#f4f7ff;
+    --muted:rgba(244,247,255,.64);
+    --dim:rgba(244,247,255,.32);
+    --line:rgba(244,247,255,.16);
+    --panel:rgba(7,10,18,.56);
+    --panel2:rgba(255,255,255,.055);
+    --v1:#78d6ff;
+    --v2:#ffcf73;
+    --danger:#ff7575;
+    --ok:#9dffba;
+  }
+  *{box-sizing:border-box}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#020308;color:var(--fg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  body{letter-spacing:.01em;user-select:none}
+  #space{position:fixed;inset:0;width:100vw;height:100vh;display:block;background:#020308}
+  .vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 47%,rgba(255,255,255,0) 0,rgba(0,0,0,.1) 42%,rgba(0,0,0,.75) 100%);mix-blend-mode:multiply}
+  .grain{position:fixed;inset:-60px;pointer-events:none;opacity:.16;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");animation:grain 1.8s steps(3,end) infinite;mix-blend-mode:screen}
+  @keyframes grain{0%{transform:translate3d(0,0,0)}25%{transform:translate3d(-18px,11px,0)}50%{transform:translate3d(13px,-15px,0)}75%{transform:translate3d(-7px,-9px,0)}100%{transform:translate3d(0,0,0)}}
+  .ui{position:fixed;inset:0;pointer-events:none}
+  .topbar{position:absolute;left:34px;right:34px;top:26px;display:flex;justify-content:space-between;align-items:flex-start;gap:24px;pointer-events:none}
+  .brand h1{font-size:clamp(30px,4.5vw,82px);line-height:.84;margin:0;font-weight:780;letter-spacing:-.07em;text-transform:uppercase;text-shadow:0 0 30px rgba(120,214,255,.12)}
+  .brand .sub{margin-top:10px;color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:.35em}
+  .mission-clock{text-align:right;min-width:260px;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:16px 18px 15px;box-shadow:0 22px 80px rgba(0,0,0,.32);backdrop-filter:blur(18px)}
+  .mission-clock .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.28em}
+  .mission-clock .date{font-size:23px;font-weight:720;letter-spacing:-.03em;margin-top:4px}
+  .mission-clock .au{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+  .panel{position:absolute;left:30px;bottom:32px;width:min(485px,calc(100vw - 60px));background:linear-gradient(180deg,rgba(9,12,22,.72),rgba(5,7,12,.54));border:1px solid rgba(255,255,255,.13);border-radius:28px;box-shadow:0 24px 100px rgba(0,0,0,.42);backdrop-filter:blur(20px);pointer-events:auto;overflow:hidden}
+  .panel .inner{padding:20px 20px 18px}
+  .controls{display:grid;grid-template-columns:auto auto 1fr;gap:10px;align-items:center}
+  button{appearance:none;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.075);color:var(--fg);border-radius:999px;height:42px;padding:0 16px;font-weight:650;font-size:13px;letter-spacing:.01em;cursor:pointer;transition:.18s ease;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  button:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.26);transform:translateY(-1px)}
+  button:active{transform:translateY(0)}
+  button.primary{background:linear-gradient(135deg,rgba(120,214,255,.23),rgba(255,207,115,.15));border-color:rgba(255,255,255,.24)}
+  .field{display:flex;align-items:center;gap:10px;min-width:0}
+  .field span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.16em;white-space:nowrap}
+  input[type=range]{width:100%;accent-color:#ffffff;cursor:pointer}
+  .timeline{margin-top:18px}
+  .range-wrap{position:relative;padding-top:8px}
+  #timeRange{width:100%}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .legend-card{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.045);border-radius:18px;padding:13px 14px;min-width:0}
+  .legend-title{display:flex;align-items:center;gap:8px;font-weight:760;font-size:13px;letter-spacing:.01em}
+  .dot{width:9px;height:9px;border-radius:50%;box-shadow:0 0 22px currentColor;flex:0 0 auto}.dot.v1{color:var(--v1);background:var(--v1)}.dot.v2{color:var(--v2);background:var(--v2)}
+  .legend-meta{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:6px}
+  .data-row{display:flex;gap:9px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  .status{font-size:11.5px;color:var(--muted);line-height:1.35;flex:1 1 210px}.status b{color:var(--fg);font-weight:680}
+  .right-panel{position:absolute;right:30px;bottom:32px;width:min(390px,calc(100vw - 60px));background:linear-gradient(180deg,rgba(9,12,22,.65),rgba(5,7,12,.48));border:1px solid rgba(255,255,255,.12);border-radius:28px;box-shadow:0 24px 100px rgba(0,0,0,.38);backdrop-filter:blur(20px);pointer-events:none;overflow:hidden}
+  .right-panel .inner{padding:19px 20px 18px}
+  .right-panel h2{margin:0;font-size:16px;text-transform:uppercase;letter-spacing:.14em}
+  .event-list{margin-top:14px;display:grid;gap:10px}
+  .event{display:grid;grid-template-columns:76px 1fr;gap:12px;align-items:baseline;border-top:1px solid rgba(255,255,255,.09);padding-top:10px}
+  .event:first-child{border-top:0;padding-top:0}
+  .event .year{font-size:12px;color:var(--muted);letter-spacing:.08em}.event .name{font-size:13px;font-weight:680}.event .desc{font-size:11.5px;color:var(--muted);line-height:1.35;margin-top:2px}
+  .hint{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);font-size:11px;color:rgba(255,255,255,.52);letter-spacing:.16em;text-transform:uppercase;text-align:center;pointer-events:none;white-space:nowrap}
+  .minimal .panel,.minimal .right-panel,.minimal .sub,.minimal .mission-clock{opacity:0;transform:translateY(10px);transition:.25s ease;pointer-events:none}.minimal .brand h1{opacity:.16}
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.055);border-radius:999px;padding:8px 10px;color:var(--muted);font-size:11px;line-height:1}
+  .kbd{border:1px solid rgba(255,255,255,.2);border-bottom-color:rgba(255,255,255,.1);border-radius:6px;padding:2px 5px;color:var(--fg);background:rgba(255,255,255,.07);font-size:10px}
+  @media (max-width:980px){.right-panel{display:none}.brand h1{font-size:42px}.topbar{left:20px;right:20px;top:20px}.mission-clock{display:none}.panel{left:16px;bottom:18px;width:calc(100vw - 32px)}.hint{display:none}.legend{grid-template-columns:1fr}.controls{grid-template-columns:auto auto;}.controls .field{grid-column:1 / -1}}
+</style>
+</head>
+<body>
+<canvas id="space"></canvas>
+<div class="vignette"></div>
+<div class="grain"></div>
+<div class="ui" id="ui">
+  <div class="topbar">
+    <div class="brand">
+      <h1>VOYAGER<br>INTERSTELLAR</h1>
+      <div class="sub">Twin trajectories from Earth to the heliopause and beyond</div>
+    </div>
+    <div class="mission-clock">
+      <div class="label">Mission Time</div>
+      <div class="date" id="dateReadout">1977</div>
+      <div class="au" id="distanceReadout">Loading trajectory...</div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <div class="inner">
+      <div class="controls">
+        <button class="primary" id="playBtn">Pause</button>
+        <button id="todayBtn">Today</button>
+        <div class="field"><span>Speed</span><input id="speedRange" type="range" min="0" max="100" value="42"></div>
+      </div>
+      <div class="timeline">
+        <div class="field"><span>Timeline</span><input id="timeRange" type="range" min="0" max="10000" value="10000"></div>
+      </div>
+      <div class="legend">
+        <div class="legend-card">
+          <div class="legend-title"><i class="dot v1"></i> Voyager 1</div>
+          <div class="legend-meta">Jupiter, Saturn, Titan gravity assist, then a steep escape above the planetary plane.</div>
+        </div>
+        <div class="legend-card">
+          <div class="legend-title"><i class="dot v2"></i> Voyager 2</div>
+          <div class="legend-meta">The grand tour route: Jupiter, Saturn, Uranus and Neptune, then interstellar cruise.</div>
+        </div>
+      </div>
+      <div class="data-row">
+        <button id="loadBtn">Load JPL Horizons Data</button>
+        <button id="viewBtn">Cinematic Mode</button>
+        <span class="status" id="dataStatus"><b>Offline fallback active.</b> Click JPL load for sampled NASA Horizons vectors when online.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="right-panel">
+    <div class="inner">
+      <h2>Mission Marks</h2>
+      <div class="event-list" id="eventList"></div>
+    </div>
+  </section>
+  <div class="hint">Drag to orbit camera · Wheel to zoom · <span class="kbd">Space</span> play/pause · <span class="kbd">C</span> clean view</div>
+</div>
+<script>
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById("space");
+  const ctx = canvas.getContext("2d", { alpha:false, desynchronized:true });
+  const ui = document.getElementById("ui");
+  const playBtn = document.getElementById("playBtn");
+  const todayBtn = document.getElementById("todayBtn");
+  const speedRange = document.getElementById("speedRange");
+  const timeRange = document.getElementById("timeRange");
+  const loadBtn = document.getElementById("loadBtn");
+  const viewBtn = document.getElementById("viewBtn");
+  const dateReadout = document.getElementById("dateReadout");
+  const distanceReadout = document.getElementById("distanceReadout");
+  const dataStatus = document.getElementById("dataStatus");
+  const eventList = document.getElementById("eventList");
+
+  const DAY = 86400000;
+  const AU_KM = 149597870.7;
+  const launchStart = Date.UTC(1977,7,20,14,29,44);
+  const today = new Date();
+  const missionEnd = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 12,0,0);
+  let tNow = missionEnd;
+  let playing = true;
+  let last = performance.now();
+  let dpr = 1, W = 0, H = 0, cx = 0, cy = 0;
+  let camera = { yaw:-0.72, pitch:0.52, zoom:1.0, targetYaw:-0.72, targetPitch:0.52, targetZoom:1.0 };
+  let mouse = { down:false, x:0, y:0 };
+  let source = "fallback";
+
+  const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+  const lerp = (a,b,t) => a + (b-a)*t;
+  const ease = t => t*t*(3-2*t);
+  const dateUTC = (y,m,d,h=0,min=0,s=0) => Date.UTC(y,m-1,d,h,min,s);
+  const fmtDate = ms => new Intl.DateTimeFormat("en", { year:"numeric", month:"short", day:"2-digit", timeZone:"UTC" }).format(new Date(ms));
+  const yearOf = ms => new Date(ms).getUTCFullYear();
+  const distAU = p => Math.hypot(p.x,p.y,p.z);
+
+  const planets = [
+    { name:"Mercury", a:.387, period:87.969, radius:2.2, phase:1.8, color:"rgba(210,210,210,.55)" },
+    { name:"Venus", a:.723, period:224.701, radius:3.1, phase:2.6, color:"rgba(255,226,174,.65)" },
+    { name:"Earth", a:1.000, period:365.256, radius:3.5, phase:-1.35, color:"rgba(137,196,255,.78)" },
+    { name:"Mars", a:1.524, period:686.98, radius:2.7, phase:.35, color:"rgba(255,135,100,.62)" },
+    { name:"Jupiter", a:5.203, period:4332.59, radius:8.2, phase:-.74, color:"rgba(255,212,160,.82)" },
+    { name:"Saturn", a:9.537, period:10759.2, radius:7.1, phase:.54, color:"rgba(245,215,151,.76)" },
+    { name:"Uranus", a:19.191, period:30685.4, radius:5.2, phase:2.21, color:"rgba(162,236,255,.67)" },
+    { name:"Neptune", a:30.07, period:60189, radius:5.1, phase:2.97, color:"rgba(105,142,255,.72)" }
+  ];
+
+  function planetPos(pl, ms){
+    const days = (ms - Date.UTC(2000,0,1,12,0,0))/DAY;
+    const th = pl.phase + days/pl.period * Math.PI*2;
+    return { x:pl.a*Math.cos(th), y:pl.a*Math.sin(th), z:0 };
+  }
+
+  const milestones = [
+    { craft:"v1", date:dateUTC(1977,9,5,12,56,1), title:"Voyager 1 launch", desc:"Earth departure", color:"v1" },
+    { craft:"v1", date:dateUTC(1979,3,5), title:"Jupiter flyby", desc:"Gravity assist and imaging campaign", color:"v1" },
+    { craft:"v1", date:dateUTC(1980,11,12), title:"Saturn / Titan", desc:"Trajectory bends out of the ecliptic", color:"v1" },
+    { craft:"v1", date:dateUTC(2012,8,25), title:"Interstellar space", desc:"Crosses the heliopause", color:"v1" },
+    { craft:"v2", date:dateUTC(1977,8,20,14,29,44), title:"Voyager 2 launch", desc:"The grand tour begins", color:"v2" },
+    { craft:"v2", date:dateUTC(1979,7,9), title:"Jupiter flyby", desc:"First major slingshot", color:"v2" },
+    { craft:"v2", date:dateUTC(1981,8,26), title:"Saturn flyby", desc:"Course set toward Uranus", color:"v2" },
+    { craft:"v2", date:dateUTC(1986,1,24), title:"Uranus flyby", desc:"Only close spacecraft encounter", color:"v2" },
+    { craft:"v2", date:dateUTC(1989,8,25), title:"Neptune flyby", desc:"Final planetary encounter", color:"v2" },
+    { craft:"v2", date:dateUTC(2018,11,5), title:"Interstellar space", desc:"Second human-made probe beyond the heliopause", color:"v2" }
+  ].sort((a,b)=>a.date-b.date);
+
+  function buildEvents(){
+    eventList.innerHTML = milestones
+      .filter(m => ["Voyager 1 launch","Jupiter flyby","Saturn / Titan","Uranus flyby","Neptune flyby","Interstellar space"].includes(m.title))
+      .slice(0,8)
+      .map(m => `<div class="event"><div class="year">${yearOf(m.date)}</div><div><div class="name">${m.title}</div><div class="desc">${m.desc}</div></div></div>`).join("");
+  }
+  buildEvents();
+
+  function normalize(v){ const n = Math.hypot(v.x,v.y,v.z)||1; return {x:v.x/n,y:v.y/n,z:v.z/n}; }
+  function mul(v,s){ return {x:v.x*s,y:v.y*s,z:v.z*s}; }
+  function add(a,b){ return {x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}; }
+  function catmull(p0,p1,p2,p3,t){
+    const t2=t*t, t3=t2*t;
+    return {
+      x:.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+      y:.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3),
+      z:.5*((2*p1.z)+(-p0.z+p2.z)*t+(2*p0.z-5*p1.z+4*p2.z-p3.z)*t2+(-p0.z+3*p1.z-3*p2.z+p3.z)*t3)
+    };
+  }
+
+  function missionWaypoints(craft){
+    const launch = craft === "v1" ? dateUTC(1977,9,5,12,56,1) : dateUTC(1977,8,20,14,29,44);
+    const earth = planetPos(planets[2], launch);
+    const points = [{ t:launch, p:{x:earth.x,y:earth.y,z:.02} }];
+    if(craft === "v1"){
+      const j = dateUTC(1979,3,5), s = dateUTC(1980,11,12), hp = dateUTC(2012,8,25);
+      const jp = add(planetPos(planets[4], j), {x:.08,y:-.05,z:.04});
+      const sp = add(planetPos(planets[5], s), {x:-.12,y:.1,z:.28});
+      const dir = normalize({x:sp.x*.68 + jp.x*.18, y:sp.y*.68 + jp.y*.18, z:1.6});
+      points.push({t:j,p:jp},{t:s,p:sp},{t:hp,p:mul(dir,121)});
+      points.push({t:missionEnd,p:mul(dir,168)});
+    } else {
+      const j = dateUTC(1979,7,9), s = dateUTC(1981,8,26), u = dateUTC(1986,1,24), n = dateUTC(1989,8,25), hp = dateUTC(2018,11,5);
+      const jp = add(planetPos(planets[4], j), {x:-.05,y:.09,z:-.03});
+      const sp = add(planetPos(planets[5], s), {x:.12,y:-.08,z:-.12});
+      const up = add(planetPos(planets[6], u), {x:.18,y:.12,z:-.26});
+      const np = add(planetPos(planets[7], n), {x:-.2,y:.16,z:-.48});
+      const dir = normalize({x:np.x*.95, y:np.y*.95, z:-.75});
+      points.push({t:j,p:jp},{t:s,p:sp},{t:u,p:up},{t:n,p:np},{t:hp,p:mul(dir,119)});
+      points.push({t:missionEnd,p:mul(dir,141)});
+    }
+    return points;
+  }
+
+  function sampleMission(craft, dense=false){
+    const wp = missionWaypoints(craft);
+    const points = [];
+    for(let i=0;i<wp.length-1;i++){
+      const a = wp[i], b = wp[i+1];
+      const dur = b.t-a.t;
+      const step = dense ? 4*DAY : (dur < 1400*DAY ? 5*DAY : 35*DAY);
+      const n = Math.max(4, Math.ceil(dur/step));
+      const p0 = wp[Math.max(0,i-1)].p, p1 = a.p, p2 = b.p, p3 = wp[Math.min(wp.length-1,i+2)].p;
+      for(let k=0;k<n;k++){
+        const q = k/n;
+        points.push({ t:lerp(a.t,b.t,q), ...catmull(p0,p1,p2,p3,ease(q)) });
+      }
+    }
+    const lastWp = wp[wp.length-1]; points.push({t:lastWp.t,...lastWp.p});
+    return points;
+  }
+
+  const state = {
+    v1:{ color:"#78d6ff", glow:"rgba(120,214,255,", name:"Voyager 1", points:sampleMission("v1") },
+    v2:{ color:"#ffcf73", glow:"rgba(255,207,115,", name:"Voyager 2", points:sampleMission("v2") }
+  };
+
+  const stars = Array.from({length:1300}, (_,i)=>({
+    x:Math.random()*2-1, y:Math.random()*2-1, z:Math.random(), r:Math.pow(Math.random(),2)*1.7+.18, a:Math.random()*.62+.18, tw:Math.random()*Math.PI*2
+  }));
+  const dust = Array.from({length:90}, ()=>({
+    x:(Math.random()*2-1)*1.2, y:(Math.random()*2-1)*1.2, s:Math.random()*560+120, a:Math.random()*.11+.025
+  }));
+
+  function resize(){
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = Math.floor(innerWidth*dpr); H = Math.floor(innerHeight*dpr); cx=W/2; cy=H/2;
+    canvas.width = W; canvas.height = H; canvas.style.width=innerWidth+"px"; canvas.style.height=innerHeight+"px";
+    ctx.setTransform(1,0,0,1,0,0);
+  }
+  addEventListener("resize", resize, {passive:true}); resize();
+
+  function scaleR(r){
+    const max = 175;
+    return Math.log(1+r*1.4)/Math.log(1+max*1.4);
+  }
+
+  function rotate(p){
+    const cyaw=Math.cos(camera.yaw), syaw=Math.sin(camera.yaw), cp=Math.cos(camera.pitch), sp=Math.sin(camera.pitch);
+    const x = p.x*cyaw - p.y*syaw;
+    const y = p.x*syaw + p.y*cyaw;
+    const z = p.z;
+    return { x, y:y*cp - z*sp, z:y*sp + z*cp };
+  }
+
+  function project(p){
+    const r = Math.hypot(p.x,p.y,p.z);
+    const compressed = r > 0 ? scaleR(r) / r : 0;
+    const pp = rotate({x:p.x*compressed, y:p.y*compressed, z:p.z*compressed});
+    const base = Math.min(W,H)*.43*camera.zoom;
+    const perspective = 1/(1 + pp.z*.42);
+    return { x:cx + pp.x*base*perspective, y:cy + pp.y*base*perspective, z:pp.z, size:perspective, r:r };
+  }
+
+  function pathPoint(points, t){
+    if(t <= points[0].t) return points[0];
+    if(t >= points[points.length-1].t) return points[points.length-1];
+    let lo=0, hi=points.length-1;
+    while(hi-lo>1){ const m=(lo+hi)>>1; if(points[m].t<t) lo=m; else hi=m; }
+    const a=points[lo], b=points[hi];
+    const q=ease((t-a.t)/(b.t-a.t));
+    return { t, x:lerp(a.x,b.x,q), y:lerp(a.y,b.y,q), z:lerp(a.z,b.z,q) };
+  }
+
+  function drawBackground(now){
+    ctx.fillStyle = "#020308";
+    ctx.fillRect(0,0,W,H);
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,H)*.72);
+    g.addColorStop(0,"rgba(30,46,78,.24)");
+    g.addColorStop(.42,"rgba(8,14,30,.55)");
+    g.addColorStop(1,"rgba(0,0,0,1)");
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    for(const d of dust){
+      const x = cx + d.x*W*.45 + Math.sin(now*.00005+d.s)*26*dpr;
+      const y = cy + d.y*H*.45 + Math.cos(now*.00004+d.s)*20*dpr;
+      const rg = ctx.createRadialGradient(x,y,0,x,y,d.s*dpr);
+      rg.addColorStop(0,`rgba(72,98,160,${d.a})`);
+      rg.addColorStop(.5,`rgba(72,98,160,${d.a*.28})`);
+      rg.addColorStop(1,"rgba(72,98,160,0)");
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(x,y,d.s*dpr,0,Math.PI*2); ctx.fill();
+    }
+    for(const s of stars){
+      const par = .65+s.z*.5;
+      let x = (s.x*.5+.5)*W + Math.sin(now*.000012+s.tw)*18*par*dpr;
+      let y = (s.y*.5+.5)*H + Math.cos(now*.000015+s.tw)*12*par*dpr;
+      const a = s.a*(.65+.35*Math.sin(now*.001+s.tw));
+      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      ctx.beginPath(); ctx.arc(x,y,s.r*dpr*par,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawOrbit(pl){
+    const steps = 220;
+    ctx.beginPath();
+    for(let i=0;i<=steps;i++){
+      const th=i/steps*Math.PI*2;
+      const p=project({x:pl.a*Math.cos(th),y:pl.a*Math.sin(th),z:0});
+      if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+    }
+    ctx.strokeStyle = pl.a < 2 ? "rgba(255,255,255,.075)" : "rgba(255,255,255,.105)";
+    ctx.lineWidth = pl.a < 2 ? .7*dpr : 1*dpr;
+    ctx.stroke();
+  }
+
+  function drawPlanets(t){
+    ctx.save();
+    planets.forEach(pl => drawOrbit(pl));
+    const sun = project({x:0,y:0,z:0});
+    const sg = ctx.createRadialGradient(sun.x,sun.y,0,sun.x,sun.y,54*dpr);
+    sg.addColorStop(0,"rgba(255,255,255,.95)"); sg.addColorStop(.18,"rgba(255,233,170,.8)"); sg.addColorStop(.55,"rgba(255,190,88,.16)"); sg.addColorStop(1,"rgba(255,190,88,0)");
+    ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(sun.x,sun.y,56*dpr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.98)"; ctx.beginPath(); ctx.arc(sun.x,sun.y,5.6*dpr,0,Math.PI*2); ctx.fill();
+
+    for(const pl of planets){
+      const pos = planetPos(pl,t); const p=project(pos);
+      const rr = (pl.radius*dpr)*(pl.a>4?1.15:1);
+      ctx.fillStyle=pl.color; ctx.beginPath(); ctx.arc(p.x,p.y,rr*p.size,0,Math.PI*2); ctx.fill();
+      if(pl.name==="Saturn"){
+        ctx.strokeStyle="rgba(255,230,170,.38)"; ctx.lineWidth=1.1*dpr; ctx.beginPath(); ctx.ellipse(p.x,p.y,rr*2.2*p.size,rr*.75*p.size,camera.yaw*.55,0,Math.PI*2); ctx.stroke();
+      }
+      if(pl.a >= 5 || pl.name === "Earth"){
+        ctx.font = `${11*dpr}px Inter, sans-serif`; ctx.fillStyle="rgba(255,255,255,.52)"; ctx.fillText(pl.name.toUpperCase(),p.x+10*dpr,p.y-8*dpr);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawPath(craftKey,t,now){
+    const craft = state[craftKey];
+    const pts = craft.points;
+    const color = craft.color;
+    const glow = craft.glow;
+    const endIndex = pts.findIndex(p=>p.t>t);
+    const maxI = endIndex < 0 ? pts.length-1 : Math.max(1,endIndex);
+
+    ctx.save();
+    ctx.lineCap="round"; ctx.lineJoin="round";
+
+    for(let layer=0; layer<3; layer++){
+      ctx.beginPath();
+      let started=false;
+      for(let i=0; i<=maxI; i++){
+        const p = project(pts[i]);
+        if(!started){ctx.moveTo(p.x,p.y); started=true;} else ctx.lineTo(p.x,p.y);
+      }
+      const live = pathPoint(pts,t); const lp = project(live); ctx.lineTo(lp.x,lp.y);
+      ctx.strokeStyle = layer===0 ? `${glow}.055)` : layer===1 ? `${glow}.17)` : color;
+      ctx.lineWidth = (layer===0?14:layer===1?6:1.6)*dpr;
+      ctx.globalAlpha = layer===2 ? .86 : 1;
+      ctx.stroke();
+    }
+
+    ctx.setLineDash([4*dpr,10*dpr]);
+    ctx.beginPath();
+    for(let i=maxI; i<pts.length; i++){
+      const p = project(pts[i]); if(i===maxI) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+    }
+    ctx.strokeStyle = `${glow}.22)`; ctx.lineWidth=1*dpr; ctx.stroke(); ctx.setLineDash([]);
+
+    const live = pathPoint(pts,t); const pp=project(live);
+    const pulse = .65 + .35*Math.sin(now*.006 + (craftKey==="v1"?0:1.7));
+    const rg = ctx.createRadialGradient(pp.x,pp.y,0,pp.x,pp.y,(22+16*pulse)*dpr);
+    rg.addColorStop(0,`${glow}.9)`); rg.addColorStop(.22,`${glow}.42)`); rg.addColorStop(1,`${glow}0)`);
+    ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(pp.x,pp.y,(28+10*pulse)*dpr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(pp.x,pp.y,2.6*dpr,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=color; ctx.lineWidth=1*dpr; ctx.beginPath(); ctx.arc(pp.x,pp.y,(8+4*pulse)*dpr,0,Math.PI*2); ctx.stroke();
+
+    ctx.font = `${12*dpr}px Inter, sans-serif`; ctx.fillStyle="rgba(255,255,255,.82)";
+    ctx.fillText(craft.name.toUpperCase(), pp.x+14*dpr, pp.y-12*dpr);
+    ctx.font = `${10*dpr}px Inter, sans-serif`; ctx.fillStyle="rgba(255,255,255,.54)";
+    ctx.fillText(`${distAU(live).toFixed(1)} AU`, pp.x+14*dpr, pp.y+3*dpr);
+    ctx.restore();
+  }
+
+  function drawMilestones(t,now){
+    ctx.save();
+    for(const m of milestones){
+      if(m.date > t) continue;
+      const pts = m.craft === "v1" ? state.v1.points : state.v2.points;
+      const pos = pathPoint(pts,m.date); const p=project(pos);
+      const active = Math.abs(t - m.date) < 90*DAY;
+      ctx.strokeStyle = m.color === "v1" ? "rgba(120,214,255,.62)" : "rgba(255,207,115,.62)";
+      ctx.lineWidth = (active?1.8:1)*dpr;
+      ctx.beginPath(); ctx.arc(p.x,p.y,(active?13:7)*dpr,0,Math.PI*2); ctx.stroke();
+      if(active || ["Jupiter flyby","Saturn / Titan","Uranus flyby","Neptune flyby","Interstellar space"].includes(m.title)){
+        const alpha = active ? .95 : .45;
+        ctx.font = `${active?12:10.5*dpr}px Inter, sans-serif`;
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        ctx.fillText(`${yearOf(m.date)} · ${m.title}`, p.x+12*dpr, p.y+22*dpr);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawHeliopause(){
+    ctx.save();
+    ctx.strokeStyle="rgba(120,214,255,.12)"; ctx.lineWidth=1*dpr; ctx.setLineDash([7*dpr,12*dpr]);
+    const steps=360, r=121;
+    ctx.beginPath();
+    for(let i=0;i<=steps;i++){
+      const th=i/steps*Math.PI*2; const p=project({x:r*Math.cos(th),y:r*Math.sin(th),z:0});
+      if(i===0)ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    const label=project({x:121,y:0,z:0});
+    ctx.font=`${11*dpr}px Inter, sans-serif`; ctx.fillStyle="rgba(160,215,255,.42)";
+    ctx.fillText("HELIOPAUSE REGION", label.x+14*dpr, label.y);
+    ctx.restore();
+  }
+
+  function drawScanlines(now){
+    ctx.save();
+    ctx.globalAlpha=.11; ctx.strokeStyle="rgba(255,255,255,.16)"; ctx.lineWidth=1*dpr;
+    const gap=5*dpr; const off=(now*.02)%gap;
+    for(let y=off;y<H;y+=gap){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    ctx.restore();
+  }
+
+  function updateReadout(){
+    dateReadout.textContent = fmtDate(tNow);
+    const p1=pathPoint(state.v1.points,tNow), p2=pathPoint(state.v2.points,tNow);
+    distanceReadout.innerHTML = `<span style="color:var(--v1)">V1 ${distAU(p1).toFixed(1)} AU</span> &nbsp; <span style="color:var(--v2)">V2 ${distAU(p2).toFixed(1)} AU</span><br>${source === "jpl" ? "Sampled from JPL Horizons vectors" : "Cinematic offline fallback"}`;
+    timeRange.value = Math.round((tNow-launchStart)/(missionEnd-launchStart)*10000);
+  }
+
+  function speedFromSlider(){
+    const v=Number(speedRange.value)/100;
+    return Math.pow(v,2.45) * 4200 + 1; // mission days per real second
+  }
+
+  function frame(now){
+    const dt = Math.min(.08,(now-last)/1000); last=now;
+    camera.yaw = lerp(camera.yaw,camera.targetYaw,.08);
+    camera.pitch = lerp(camera.pitch,camera.targetPitch,.08);
+    camera.zoom = lerp(camera.zoom,camera.targetZoom,.08);
+    if(playing){
+      tNow += dt * speedFromSlider() * DAY;
+      if(tNow > missionEnd) tNow = launchStart;
+      updateReadout();
+    }
+    drawBackground(now);
+    drawHeliopause();
+    drawPlanets(tNow);
+    drawPath("v1",tNow,now);
+    drawPath("v2",tNow,now);
+    drawMilestones(tNow,now);
+    drawScanlines(now);
+    requestAnimationFrame(frame);
+  }
+
+  playBtn.addEventListener("click",()=>{playing=!playing;playBtn.textContent=playing?"Pause":"Play";});
+  todayBtn.addEventListener("click",()=>{tNow=missionEnd;playing=false;playBtn.textContent="Play";updateReadout();});
+  timeRange.addEventListener("input",()=>{playing=false;playBtn.textContent="Play";const q=Number(timeRange.value)/10000;tNow=lerp(launchStart,missionEnd,q);updateReadout();});
+  viewBtn.addEventListener("click",()=>{ui.classList.toggle("minimal");});
+  addEventListener("keydown",e=>{
+    if(e.code==="Space"){e.preventDefault();playing=!playing;playBtn.textContent=playing?"Pause":"Play";}
+    if(e.key.toLowerCase()==="c") ui.classList.toggle("minimal");
+    if(e.key.toLowerCase()==="t"){tNow=missionEnd;playing=false;playBtn.textContent="Play";updateReadout();}
+  });
+  canvas.addEventListener("pointerdown",e=>{mouse.down=true;mouse.x=e.clientX;mouse.y=e.clientY;canvas.setPointerCapture(e.pointerId);});
+  canvas.addEventListener("pointerup",e=>{mouse.down=false;try{canvas.releasePointerCapture(e.pointerId)}catch(_){}});
+  canvas.addEventListener("pointermove",e=>{if(!mouse.down)return;const dx=e.clientX-mouse.x,dy=e.clientY-mouse.y;mouse.x=e.clientX;mouse.y=e.clientY;camera.targetYaw+=dx*.006;camera.targetPitch=clamp(camera.targetPitch+dy*.004,-1.2,1.2);});
+  canvas.addEventListener("wheel",e=>{e.preventDefault();camera.targetZoom=clamp(camera.targetZoom*(1-e.deltaY*.001),.42,2.3);},{passive:false});
+
+  function jdToMs(jd){ return (jd - 2440587.5) * DAY; }
+  function parseHorizonsVectors(text){
+    const start = text.indexOf("$$SOE"), end = text.indexOf("$$EOE");
+    if(start < 0 || end < 0) throw new Error("Horizons result did not contain vector table markers.");
+    const body = text.slice(start+5,end).trim().split(/\r?\n/);
+    const pts=[];
+    for(const raw of body){
+      const line = raw.trim();
+      if(!line || line.startsWith("$$")) continue;
+      const parts=line.split(",").map(s=>s.trim());
+      if(parts.length >= 5){
+        const jd = Number(parts[0]);
+        const x = Number(parts[2]), y = Number(parts[3]), z = Number(parts[4]);
+        if(Number.isFinite(jd)&&Number.isFinite(x)&&Number.isFinite(y)&&Number.isFinite(z)) pts.push({t:jdToMs(jd),x,y,z});
+        continue;
+      }
+      const xMatch = line.match(/\bX\s*=\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)/);
+      const yMatch = line.match(/\bY\s*=\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)/);
+      const zMatch = line.match(/\bZ\s*=\s*([-+]?\d*\.?\d+(?:[Ee][-+]?\d+)?)/);
+      const jdMatch = line.match(/^\s*([-+]?\d+\.\d+)/);
+      if(xMatch&&yMatch&&zMatch&&jdMatch) pts.push({t:jdToMs(Number(jdMatch[1])),x:Number(xMatch[1]),y:Number(yMatch[1]),z:Number(zMatch[1])});
+    }
+    if(pts.length < 20) throw new Error("Could not parse enough vector points.");
+    return pts.filter(p=>p.t>=launchStart-40*DAY && p.t<=missionEnd+40*DAY).sort((a,b)=>a.t-b.t);
+  }
+
+  async function fetchHorizons(id,start){
+    const url = new URL("https://ssd.jpl.nasa.gov/api/horizons.api");
+    url.search = new URLSearchParams({
+      format:"json",
+      COMMAND:`'${id}'`,
+      OBJ_DATA:"NO",
+      MAKE_EPHEM:"YES",
+      EPHEM_TYPE:"VECTORS",
+      CENTER:"'@0'",
+      START_TIME:`'${start}'`,
+      STOP_TIME:`'${new Date(missionEnd).toISOString().slice(0,10)}'`,
+      STEP_SIZE:"'20 d'",
+      OUT_UNITS:"AU-D",
+      REF_PLANE:"ECLIPTIC",
+      REF_SYSTEM:"ICRF",
+      CSV_FORMAT:"YES",
+      VEC_TABLE:"2"
+    });
+    const res = await fetch(url.toString(), { mode:"cors" });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if(!json.result) throw new Error("No Horizons result returned.");
+    return parseHorizonsVectors(json.result);
+  }
+
+  loadBtn.addEventListener("click", async()=>{
+    loadBtn.disabled=true; loadBtn.textContent="Loading...";
+    dataStatus.innerHTML="<b>Contacting JPL Horizons.</b> This may take a moment in some browsers.";
+    try{
+      const [v1,v2] = await Promise.all([
+        fetchHorizons("-31","1977-09-05"),
+        fetchHorizons("-32","1977-08-20")
+      ]);
+      state.v1.points = v1; state.v2.points = v2; source="jpl";
+      dataStatus.innerHTML=`<b>JPL Horizons loaded.</b> ${v1.length.toLocaleString()} Voyager 1 points and ${v2.length.toLocaleString()} Voyager 2 points sampled at 20-day intervals.`;
+      loadBtn.textContent="Reload JPL Data";
+      updateReadout();
+    } catch(err){
+      console.warn(err);
+      source="fallback";
+      dataStatus.innerHTML=`<b>JPL load failed.</b> Browser/CORS/network blocked it, so the cinematic offline fallback remains active.`;
+      loadBtn.textContent="Try JPL Again";
+    } finally { loadBtn.disabled=false; }
+  });
+
+  updateReadout();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
