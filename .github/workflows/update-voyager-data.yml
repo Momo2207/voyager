@@ -9,19 +9,25 @@ permissions:
   contents: write
 
 jobs:
-  update-data:
+  update-voyager-data:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Fetch JPL Horizons vectors
+          node-version: "20"
+
+      - name: Generate Voyager data
         run: node scripts/fetch-voyager-data.mjs
+
       - name: Commit generated data
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add data/voyager_vectors.json
           git diff --cached --quiet || git commit -m "Update Voyager trajectory data"
           git push
