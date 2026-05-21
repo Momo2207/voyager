@@ -104,9 +104,11 @@
         </div>
       </div>
       <div class="data-row">
-        <button id="loadBtn">Load JPL Horizons Data</button>
+        <button id="loadBtn">Load Bundled JPL Data</button>
+        <button id="importBtn">Import JSON</button>
+        <input id="fileInput" type="file" accept="application/json,.json,.txt" hidden>
         <button id="viewBtn">Cinematic Mode</button>
-        <span class="status" id="dataStatus"><b>Offline fallback active.</b> Click JPL load for sampled NASA Horizons vectors when online.</span>
+        <span class="status" id="dataStatus"><b>GitHub Pages safe mode.</b> Add <code>data/voyager_vectors.json</code> to load sampled JPL Horizons vectors without CORS.</span>
       </div>
     </div>
   </section>
@@ -131,6 +133,8 @@
   const speedRange = document.getElementById("speedRange");
   const timeRange = document.getElementById("timeRange");
   const loadBtn = document.getElementById("loadBtn");
+  const importBtn = document.getElementById("importBtn");
+  const fileInput = document.getElementById("fileInput");
   const viewBtn = document.getElementById("viewBtn");
   const dateReadout = document.getElementById("dateReadout");
   const distanceReadout = document.getElementById("distanceReadout");
@@ -463,7 +467,7 @@
   function updateReadout(){
     dateReadout.textContent = fmtDate(tNow);
     const p1=pathPoint(state.v1.points,tNow), p2=pathPoint(state.v2.points,tNow);
-    distanceReadout.innerHTML = `<span style="color:var(--v1)">V1 ${distAU(p1).toFixed(1)} AU</span> &nbsp; <span style="color:var(--v2)">V2 ${distAU(p2).toFixed(1)} AU</span><br>${source === "jpl" ? "Sampled from JPL Horizons vectors" : "Cinematic offline fallback"}`;
+    distanceReadout.innerHTML = `<span style="color:var(--v1)">V1 ${distAU(p1).toFixed(1)} AU</span> &nbsp; <span style="color:var(--v2)">V2 ${distAU(p2).toFixed(1)} AU</span><br>${source === "jpl" || source === "bundled" ? "Sampled from JPL Horizons vectors" : "Cinematic offline fallback"}`;
     timeRange.value = Math.round((tNow-launchStart)/(missionEnd-launchStart)*10000);
   }
 
@@ -532,49 +536,86 @@
     return pts.filter(p=>p.t>=launchStart-40*DAY && p.t<=missionEnd+40*DAY).sort((a,b)=>a.t-b.t);
   }
 
-  async function fetchHorizons(id,start){
-    const url = new URL("https://ssd.jpl.nasa.gov/api/horizons.api");
-    url.search = new URLSearchParams({
-      format:"json",
-      COMMAND:`'${id}'`,
-      OBJ_DATA:"NO",
-      MAKE_EPHEM:"YES",
-      EPHEM_TYPE:"VECTORS",
-      CENTER:"'@0'",
-      START_TIME:`'${start}'`,
-      STOP_TIME:`'${new Date(missionEnd).toISOString().slice(0,10)}'`,
-      STEP_SIZE:"'20 d'",
-      OUT_UNITS:"AU-D",
-      REF_PLANE:"ECLIPTIC",
-      REF_SYSTEM:"ICRF",
-      CSV_FORMAT:"YES",
-      VEC_TABLE:"2"
-    });
-    const res = await fetch(url.toString(), { mode:"cors" });
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if(!json.result) throw new Error("No Horizons result returned.");
-    return parseHorizonsVectors(json.result);
+  function pointTime(p){
+    if(typeof p.t === "number" && Number.isFinite(p.t)) return p.t;
+    if(typeof p.time === "number" && Number.isFinite(p.time)) return p.time;
+    if(typeof p.jd === "number" && Number.isFinite(p.jd)) return jdToMs(p.jd);
+    if(typeof p.date === "string"){
+      const iso = p.date.length <= 10 ? `${p.date}T00:00:00Z` : p.date;
+      const ms = Date.parse(iso);
+      if(Number.isFinite(ms)) return ms;
+    }
+    return NaN;
+  }
+
+  function normalizePayload(payload){
+    const v1Raw = payload.voyager1 || payload.v1 || payload.Voyager1;
+    const v2Raw = payload.voyager2 || payload.v2 || payload.Voyager2;
+    if(!Array.isArray(v1Raw) || !Array.isArray(v2Raw)) throw new Error("JSON must contain voyager1 and voyager2 arrays.");
+    const clean = arr => arr.map(p => ({
+      t: pointTime(p),
+      x: Number(p.x),
+      y: Number(p.y),
+      z: Number(p.z)
+    })).filter(p => Number.isFinite(p.t) && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z))
+      .filter(p=>p.t>=launchStart-40*DAY && p.t<=missionEnd+40*DAY)
+      .sort((a,b)=>a.t-b.t);
+    const v1 = clean(v1Raw), v2 = clean(v2Raw);
+    if(v1.length < 20 || v2.length < 20) throw new Error("Not enough valid vector points in JSON.");
+    return { v1, v2 };
+  }
+
+  function applyVectorPayload(payload, label="JPL Horizons data"){
+    const {v1,v2} = normalizePayload(payload);
+    state.v1.points = v1;
+    state.v2.points = v2;
+    source = "bundled";
+    dataStatus.innerHTML = `<b>${label} loaded.</b> ${v1.length.toLocaleString()} Voyager 1 points and ${v2.length.toLocaleString()} Voyager 2 points.`;
+    updateReadout();
+  }
+
+  async function loadBundledData(){
+    const res = await fetch("data/voyager_vectors.json", { cache:"no-store" });
+    if(!res.ok) throw new Error(`Missing data/voyager_vectors.json (HTTP ${res.status}).`);
+    const payload = await res.json();
+    applyVectorPayload(payload, "Bundled JPL data");
   }
 
   loadBtn.addEventListener("click", async()=>{
-    loadBtn.disabled=true; loadBtn.textContent="Loading...";
-    dataStatus.innerHTML="<b>Contacting JPL Horizons.</b> This may take a moment in some browsers.";
+    loadBtn.disabled = true;
+    loadBtn.textContent = "Loading...";
+    dataStatus.innerHTML = "<b>Looking for bundled trajectory data.</b> Expected path: <code>data/voyager_vectors.json</code>.";
     try{
-      const [v1,v2] = await Promise.all([
-        fetchHorizons("-31","1977-09-05"),
-        fetchHorizons("-32","1977-08-20")
-      ]);
-      state.v1.points = v1; state.v2.points = v2; source="jpl";
-      dataStatus.innerHTML=`<b>JPL Horizons loaded.</b> ${v1.length.toLocaleString()} Voyager 1 points and ${v2.length.toLocaleString()} Voyager 2 points sampled at 20-day intervals.`;
-      loadBtn.textContent="Reload JPL Data";
-      updateReadout();
+      await loadBundledData();
+      loadBtn.textContent = "Reload Bundled Data";
     } catch(err){
       console.warn(err);
-      source="fallback";
-      dataStatus.innerHTML=`<b>JPL load failed.</b> Browser/CORS/network blocked it, so the cinematic offline fallback remains active.`;
-      loadBtn.textContent="Try JPL Again";
-    } finally { loadBtn.disabled=false; }
+      source = "fallback";
+      dataStatus.innerHTML = `<b>No bundled data found.</b> ${err.message} Run <code>node scripts/fetch-voyager-data.mjs</code> and commit the generated JSON, or use Import JSON.`;
+      loadBtn.textContent = "Try Bundled Data";
+    } finally {
+      loadBtn.disabled = false;
+    }
+  });
+
+  importBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async()=>{
+    const file = fileInput.files && fileInput.files[0];
+    if(!file) return;
+    importBtn.disabled = true;
+    importBtn.textContent = "Importing...";
+    try{
+      const payload = JSON.parse(await file.text());
+      applyVectorPayload(payload, "Imported JSON");
+      importBtn.textContent = "Import JSON";
+    } catch(err){
+      console.warn(err);
+      dataStatus.innerHTML = `<b>Import failed.</b> ${err.message}`;
+      importBtn.textContent = "Import JSON";
+    } finally {
+      importBtn.disabled = false;
+      fileInput.value = "";
+    }
   });
 
   updateReadout();
